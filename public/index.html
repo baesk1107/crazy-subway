@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>오늘의 지하철 혼잡도 예측 | crazy-subway</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚇</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>🚇 오늘의 지하철 혼잡도</h1>
+    <p class="subtitle">SK Open API 통계 데이터 기반, 오늘 시간대별 혼잡도 예측</p>
+    <span id="sourceBadge" class="badge badge-demo" hidden></span>
+  </header>
+
+  <main class="container">
+    <!-- 역 검색 -->
+    <section class="search-box">
+      <input id="searchInput" type="text" placeholder="역 이름을 검색하세요 (예: 강남, 홍대입구)"
+             autocomplete="off" spellcheck="false" />
+      <ul id="searchResults" class="search-results" hidden></ul>
+    </section>
+
+    <!-- 결과 영역 -->
+    <section id="result" hidden>
+      <div class="station-card">
+        <div class="station-title">
+          <span id="lineBadge" class="line-badge"></span>
+          <span id="stationName" class="station-name"></span>
+          <span id="dowLabel" class="dow-label"></span>
+        </div>
+        <div id="dirTabs" class="dir-tabs"></div>
+      </div>
+
+      <!-- 요약 -->
+      <div id="summary" class="summary-grid"></div>
+
+      <!-- 시간대별 차트 -->
+      <div class="panel">
+        <h2>시간대별 혼잡도 <small>막대를 누르면 해당 시간의 칸별 혼잡도를 볼 수 있어요</small></h2>
+        <div id="chart" class="chart"></div>
+        <div class="legend">
+          <span><i class="dot lv-여유"></i>여유 (&lt;80%)</span>
+          <span><i class="dot lv-보통"></i>보통 (80~129%)</span>
+          <span><i class="dot lv-혼잡"></i>혼잡 (130~149%)</span>
+          <span><i class="dot lv-매우혼잡"></i>매우 혼잡 (150%~)</span>
+        </div>
+      </div>
+
+      <!-- 칸별 혼잡도 -->
+      <div class="panel">
+        <h2 id="carTitle">칸별 혼잡도</h2>
+        <div id="train" class="train"></div>
+        <p id="carTip" class="car-tip"></p>
+      </div>
+    </section>
+
+    <section id="empty" class="empty">
+      <p>👆 역을 검색하면 오늘의 혼잡도 예측이 표시됩니다.</p>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>혼잡도(%)는 열차 정원 대비 탑승 인원 비율입니다. 데이터: SK Open API(퍼즐 지하철 혼잡도) ·
+       API 키가 없으면 통계 패턴 기반 데모 데이터가 표시됩니다.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

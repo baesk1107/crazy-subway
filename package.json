@@ -1,0 +1,16 @@
+{
+  "name": "crazy-subway",
+  "version": "1.0.0",
+  "description": "SK Open API 기반 지하철 혼잡도 예측 웹서비스",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

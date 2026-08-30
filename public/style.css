@@ -1,0 +1,272 @@
+:root {
+  --bg: #0f1219;
+  --panel: #1a1f2b;
+  --panel-2: #232a3a;
+  --text: #e8ecf4;
+  --muted: #8b93a7;
+  --accent: #4f8ef7;
+  --lv-여유: #22c55e;
+  --lv-보통: #eab308;
+  --lv-혼잡: #f97316;
+  --lv-매우혼잡: #ef4444;
+  --radius: 14px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  text-align: center;
+  padding: 40px 16px 20px;
+}
+.header h1 { font-size: 1.9rem; letter-spacing: -0.5px; }
+.subtitle { color: var(--muted); margin-top: 8px; font-size: 0.95rem; }
+
+.badge {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.badge-live { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34,197,94,.4); }
+.badge-demo { background: rgba(234, 179, 8, 0.12); color: #facc15; border: 1px solid rgba(234,179,8,.4); }
+
+.container {
+  width: 100%;
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 16px 40px;
+  flex: 1;
+}
+
+/* 검색 */
+.search-box { position: relative; margin: 8px 0 24px; }
+#searchInput {
+  width: 100%;
+  padding: 16px 20px;
+  font-size: 1.05rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1.5px solid #2e3750;
+  border-radius: var(--radius);
+  outline: none;
+  transition: border-color 0.15s;
+}
+#searchInput:focus { border-color: var(--accent); }
+.search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0; right: 0;
+  background: var(--panel-2);
+  border: 1px solid #2e3750;
+  border-radius: var(--radius);
+  list-style: none;
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 10;
+  box-shadow: 0 12px 32px rgba(0,0,0,.45);
+}
+.search-results li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+.search-results li:hover, .search-results li.active { background: rgba(79, 142, 247, 0.12); }
+
+/* 노선 배지 */
+.line-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+/* 역 카드 */
+.station-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.station-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.station-name { font-size: 1.5rem; font-weight: 700; }
+.dow-label { color: var(--muted); font-size: 0.9rem; margin-left: auto; }
+
+.dir-tabs { display: flex; gap: 8px; margin-top: 14px; }
+.dir-tab {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #2e3750;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.dir-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+
+/* 요약 카드 */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.summary-card {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.summary-card .label { color: var(--muted); font-size: 0.8rem; margin-bottom: 6px; }
+.summary-card .value { font-size: 1.25rem; font-weight: 700; }
+.summary-card .sub { color: var(--muted); font-size: 0.8rem; margin-top: 4px; }
+
+/* 패널 */
+.panel {
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.panel h2 { font-size: 1.05rem; margin-bottom: 16px; }
+.panel h2 small { color: var(--muted); font-weight: 400; font-size: 0.78rem; margin-left: 8px; }
+
+/* 차트 */
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 200px;
+  padding-bottom: 26px;
+  position: relative;
+}
+.bar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  position: relative;
+  cursor: pointer;
+}
+.bar {
+  width: 100%;
+  max-width: 30px;
+  border-radius: 5px 5px 2px 2px;
+  min-height: 4px;
+  transition: height 0.35s ease, opacity 0.15s;
+  opacity: 0.85;
+}
+.bar-wrap:hover .bar { opacity: 1; }
+.bar-wrap.selected .bar { outline: 2px solid #fff; opacity: 1; }
+.bar-wrap.now::after {
+  content: "지금";
+  position: absolute;
+  top: -20px;
+  font-size: 0.68rem;
+  color: var(--accent);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.bar-pct {
+  font-size: 0.66rem;
+  color: var(--muted);
+  margin-bottom: 3px;
+}
+.bar-hour {
+  position: absolute;
+  bottom: -24px;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+.lv-여유 { background: var(--lv-여유); }
+.lv-보통 { background: var(--lv-보통); }
+.lv-혼잡 { background: var(--lv-혼잡); }
+.lv-매우혼잡 { background: var(--lv-매우혼잡); }
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 20px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.legend .dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 3px;
+  margin-right: 5px;
+}
+
+/* 열차 칸별 혼잡도 */
+.train {
+  display: flex;
+  gap: 5px;
+  align-items: flex-end;
+  overflow-x: auto;
+  padding: 8px 2px 4px;
+}
+.car {
+  flex: 1;
+  min-width: 52px;
+  border-radius: 8px;
+  padding: 10px 4px 8px;
+  text-align: center;
+  position: relative;
+  color: #0b0e14;
+  font-weight: 700;
+}
+.car .car-no { font-size: 0.7rem; opacity: 0.75; font-weight: 600; }
+.car .car-pct { font-size: 0.95rem; }
+.car.best::before {
+  content: "👍 추천";
+  position: absolute;
+  top: -22px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.66rem;
+  color: var(--lv-여유);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.car-tip { margin-top: 20px; color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+
+.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 60px 0;
+}
+
+.footer {
+  text-align: center;
+  color: #565e72;
+  font-size: 0.75rem;
+  padding: 20px 16px 32px;
+  line-height: 1.6;
+}
+
+@media (max-width: 560px) {
+  .bar-hour { font-size: 0.58rem; }
+  .bar-pct { display: none; }
+  .header h1 { font-size: 1.5rem; }
+}
