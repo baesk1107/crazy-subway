@@ -13,8 +13,11 @@ const { STATIONS } = require('./data/stations');
   }
 })();
 
+// appKey는 API별이 아니라 앱(프로젝트) 단위 하나로 모든 API에 공통 사용
 const SK_APP_KEY = process.env.SK_APP_KEY || '';
-const SK_BASE = 'https://apis.openapi.sk.com/puzzle/subway/congestion';
+// TMAP 대중교통 API · 진입 역 기준 혼잡도 (문서: https://transit.tmapmobility.com/docs/puzzle/car)
+// 경로가 다르면 SK_API_BASE 환경변수로 교체 가능
+const SK_BASE = process.env.SK_API_BASE || 'https://apis.openapi.sk.com/transit/puzzle/subway/congestion';
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -43,8 +46,23 @@ function stationByCode(code) {
 }
 
 // ---------------------------------------------------------------------------
-// SK Open API 호출
+// SK Open API (TMAP 대중교통 · 진입 역 기준 통계 혼잡도) 호출
+// 하나의 appKey로 열차/칸 혼잡도 API를 모두 호출한다.
 // ---------------------------------------------------------------------------
+
+// 통계 데이터는 자주 바뀌지 않으므로 6시간 메모리 캐시로 호출량을 줄인다
+const skCache = new Map();
+const SK_CACHE_TTL = 6 * 60 * 60 * 1000;
+function cacheGet(key) {
+  const e = skCache.get(key);
+  if (e && Date.now() - e.t < SK_CACHE_TTL) return e.v;
+  skCache.delete(key);
+  return null;
+}
+function cacheSet(key, v) {
+  skCache.set(key, { t: Date.now(), v });
+}
+
 async function skFetch(url) {
   const res = await fetch(url, {
     headers: { accept: 'application/json', appKey: SK_APP_KEY },
@@ -54,54 +72,105 @@ async function skFetch(url) {
   return res.json();
 }
 
-// 역 기준 통계 열차 혼잡도 → 방향별 시간대 혼잡도로 집계
-async function skDaily(code, dow) {
-  const json = await skFetch(`${SK_BASE}/stat/train/stations/${code}?dow=${dow}`);
-  const stats = json?.data?.stat;
-  if (!Array.isArray(stats) || stats.length === 0) throw new Error('SK API: empty stat');
+// 진입 역 기준 통계 혼잡도 조회 (kind: 'train' | 'car')
+// dow/hh를 안 주면 요청 시각 기준 데이터만 오므로 시간대별로 명시 조회한다.
+async function skStat(kind, station, dow, hh) {
+  const key = `${kind}:${station.line}:${station.name}:${dow}:${hh}`;
+  const hit = cacheGet(key);
+  if (hit) return hit;
 
-  const directions = [];
-  for (const s of stats) {
-    // 10분 단위 슬롯을 시간대별 평균으로 집계
-    const byHour = new Map();
-    for (const d of s.data || []) {
-      const hh = String(d.hh).padStart(2, '0');
-      if (!byHour.has(hh)) byHour.set(hh, []);
-      byHour.get(hh).push(Number(d.congestionTrain) || 0);
-    }
-    const hours = HOURS.map((hh) => {
-      const vals = byHour.get(hh);
-      if (!vals || vals.length === 0) return { hh, congestion: null, level: null };
-      const avg = Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
-      return { hh, congestion: avg, level: level(avg) };
-    });
-    directions.push({
-      updnLine: s.updnLine,
-      label: s.endStationName ? `${s.endStationName} 방면` : s.updnLine === 0 ? '상행' : '하행',
-      hours
-    });
-  }
-  return directions;
+  const qs = new URLSearchParams({
+    routeNm: `${station.line}호선`,
+    stationNm: station.name,
+    dow,
+    hh
+  });
+  const json = await skFetch(`${SK_BASE}/stat/${kind}?${qs}`);
+  // 문서 버전에 따라 contents 또는 data 아래에 stat 배열이 온다
+  const stat = json?.contents?.stat ?? json?.data?.stat;
+  if (!Array.isArray(stat) || stat.length === 0) throw new Error(`SK API: ${kind} 응답에 stat 없음`);
+  cacheSet(key, stat);
+  return stat;
 }
 
-// 역 기준 통계 칸 혼잡도 → 해당 시간대의 칸별 평균
-async function skCars(code, dow, hh, updnLine) {
-  const json = await skFetch(`${SK_BASE}/stat/car/stations/${code}?dow=${dow}&hh=${hh}`);
-  const stats = json?.data?.stat;
-  if (!Array.isArray(stats) || stats.length === 0) throw new Error('SK API: empty car stat');
+// 방향 식별: 상/하행(updnLine) + 급행 여부(directAt) 조합
+const dirKeyOf = (s) => `${s.updnLine}:${s.directAt ? 1 : 0}`;
+function dirLabelOf(s, line) {
+  const base = s.endStationName
+    ? `${s.endStationName} 방면`
+    : line === '2'
+      ? (String(s.updnLine) === '0' ? '내선순환' : '외선순환')
+      : (String(s.updnLine) === '0' ? '상행' : '하행');
+  return s.directAt ? `${base} 급행` : base;
+}
 
-  const s = stats.find((x) => String(x.updnLine) === String(updnLine)) || stats[0];
+// 진입 역 기준 열차 혼잡도를 시간대별로 조회해 방향별 하루 곡선으로 합친다
+async function skDaily(station, dow) {
+  const byHourStat = new Map();
+  for (let i = 0; i < HOURS.length; i += 5) {
+    // 과도한 동시 호출을 피하기 위해 5개씩 묶어 병렬 조회
+    await Promise.all(HOURS.slice(i, i + 5).map(async (hh) => {
+      try {
+        byHourStat.set(hh, await skStat('train', station, dow, hh));
+      } catch {
+        byHourStat.set(hh, null);
+      }
+    }));
+  }
+  if (![...byHourStat.values()].some(Boolean)) throw new Error('SK API: 전 시간대 조회 실패');
+
+  const dirs = new Map();
+  for (const hh of HOURS) {
+    for (const s of byHourStat.get(hh) || []) {
+      const key = dirKeyOf(s);
+      if (!dirs.has(key)) {
+        dirs.set(key, {
+          updnLine: Number(s.updnLine) || 0,
+          directAt: s.directAt ? 1 : 0,
+          label: dirLabelOf(s, station.line),
+          byHour: new Map()
+        });
+      }
+      // 10분 단위 슬롯을 시간대 평균으로 집계
+      const vals = (s.data || [])
+        .map((d) => Number(d.congestionTrain))
+        .filter((n) => Number.isFinite(n) && n > 0);
+      if (vals.length) dirs.get(key).byHour.set(hh, Math.round(vals.reduce((a, b) => a + b, 0) / vals.length));
+    }
+  }
+
+  return [...dirs.values()]
+    .sort((a, b) => a.updnLine - b.updnLine || a.directAt - b.directAt)
+    .map((d) => ({
+      updnLine: d.updnLine,
+      directAt: d.directAt,
+      label: d.label,
+      hours: HOURS.map((hh) => {
+        const c = d.byHour.get(hh);
+        return c == null ? { hh, congestion: null, level: null } : { hh, congestion: c, level: level(c) };
+      })
+    }));
+}
+
+// 진입 역 기준 칸 혼잡도 → 해당 시간대의 칸별 평균
+async function skCars(station, dow, hh, updnLine, directAt) {
+  const stat = await skStat('car', station, dow, hh);
+  const s =
+    stat.find((x) => String(x.updnLine) === String(updnLine) && (x.directAt ? 1 : 0) === directAt) ||
+    stat.find((x) => String(x.updnLine) === String(updnLine)) ||
+    stat[0];
+
+  // congestionCar: "34|31|31|38|…" 구분자 문자열 → 숫자 배열
   const slots = (s.data || [])
     .map((d) => String(d.congestionCar || '').split('|').map(Number))
-    .filter((arr) => arr.length > 1 && arr.every((n) => !Number.isNaN(n)));
-  if (slots.length === 0) throw new Error('SK API: no car data');
+    .filter((arr) => arr.length > 1 && arr.every((n) => Number.isFinite(n)));
+  if (slots.length === 0) throw new Error('SK API: 칸 혼잡도 데이터 없음');
 
   const n = slots[0].length;
-  const cars = Array.from({ length: n }, (_, i) => {
+  return Array.from({ length: n }, (_, i) => {
     const avg = slots.reduce((sum, arr) => sum + (arr[i] || 0), 0) / slots.length;
     return Math.round(avg);
   });
-  return cars;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +223,7 @@ function demoDaily(code, dow, line) {
   const labels = line === '2' ? ['내선순환', '외선순환'] : ['상행', '하행'];
   return [0, 1].map((updnLine) => ({
     updnLine,
+    directAt: 0,
     label: labels[updnLine],
     hours: HOURS.map((hh) => {
       const c = demoHourCongestion(code, dow, hh, updnLine);
@@ -196,7 +266,7 @@ app.get('/api/congestion/daily', async (req, res) => {
 
   if (SK_APP_KEY) {
     try {
-      const directions = await skDaily(code, dow);
+      const directions = await skDaily(station, dow);
       return res.json({ station, dow, source: 'sk-api', directions });
     } catch (err) {
       console.warn(`[daily] SK API 실패, 데모 데이터로 폴백: ${err.message}`);
@@ -214,12 +284,13 @@ app.get('/api/congestion/car', async (req, res) => {
   const dow = DOWS.includes(req.query.dow) ? req.query.dow : kstDow();
   const hh = String(req.query.hh || kstHour());
   const updnLine = req.query.updnLine === '1' ? 1 : 0;
+  const directAt = req.query.directAt === '1' ? 1 : 0;
 
   if (SK_APP_KEY) {
     try {
-      const cars = await skCars(code, dow, hh, updnLine);
+      const cars = await skCars(station, dow, hh, updnLine, directAt);
       return res.json({
-        station, dow, hh, updnLine, source: 'sk-api',
+        station, dow, hh, updnLine, directAt, source: 'sk-api',
         cars: cars.map((c) => ({ congestion: c, level: level(c) }))
       });
     } catch (err) {
@@ -228,7 +299,7 @@ app.get('/api/congestion/car', async (req, res) => {
   }
   const cars = demoCars(code, dow, hh, updnLine);
   res.json({
-    station, dow, hh, updnLine, source: 'demo',
+    station, dow, hh, updnLine, directAt, source: 'demo',
     cars: cars.map((c) => ({ congestion: c, level: level(c) }))
   });
 });

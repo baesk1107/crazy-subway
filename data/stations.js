@@ -1,5 +1,6 @@
-// 서울교통공사 관할 1~8호선 역 코드 (SK Open API 퍼즐 지하철 혼잡도 API의 stationCode)
-// 실시간/통계 API 모두 이 3자리 코드를 사용한다.
+// 서울 지하철 1~9호선 역 목록.
+// SK Open API(진입 역 기준 혼잡도)는 노선명(routeNm)+역명(stationNm)으로 조회하므로
+// code는 이 서비스 내부 식별자(및 데모 데이터 시드)로만 쓰인다.
 const STATIONS = [
   // 1호선 (서울교통공사 구간)
   { line: '1', code: '124', name: '청량리' },
@@ -277,7 +278,47 @@ const STATIONS = [
   { line: '8', code: '823', name: '단대오거리' },
   { line: '8', code: '824', name: '신흥' },
   { line: '8', code: '825', name: '수진' },
-  { line: '8', code: '826', name: '모란' }
+  { line: '8', code: '826', name: '모란' },
+
+  // 9호선 (급행 운행 노선)
+  { line: '9', code: '901', name: '개화' },
+  { line: '9', code: '902', name: '김포공항' },
+  { line: '9', code: '903', name: '공항시장' },
+  { line: '9', code: '904', name: '신방화' },
+  { line: '9', code: '905', name: '마곡나루' },
+  { line: '9', code: '906', name: '양천향교' },
+  { line: '9', code: '907', name: '가양' },
+  { line: '9', code: '908', name: '증미' },
+  { line: '9', code: '909', name: '등촌' },
+  { line: '9', code: '910', name: '염창' },
+  { line: '9', code: '911', name: '신목동' },
+  { line: '9', code: '912', name: '선유도' },
+  { line: '9', code: '913', name: '당산' },
+  { line: '9', code: '914', name: '국회의사당' },
+  { line: '9', code: '915', name: '여의도' },
+  { line: '9', code: '916', name: '샛강' },
+  { line: '9', code: '917', name: '노량진' },
+  { line: '9', code: '918', name: '노들' },
+  { line: '9', code: '919', name: '흑석' },
+  { line: '9', code: '920', name: '동작' },
+  { line: '9', code: '921', name: '구반포' },
+  { line: '9', code: '922', name: '신반포' },
+  { line: '9', code: '923', name: '고속터미널' },
+  { line: '9', code: '924', name: '사평' },
+  { line: '9', code: '925', name: '신논현' },
+  { line: '9', code: '926', name: '언주' },
+  { line: '9', code: '927', name: '선정릉' },
+  { line: '9', code: '928', name: '삼성중앙' },
+  { line: '9', code: '929', name: '봉은사' },
+  { line: '9', code: '930', name: '종합운동장' },
+  { line: '9', code: '931', name: '삼전' },
+  { line: '9', code: '932', name: '석촌고분' },
+  { line: '9', code: '933', name: '석촌' },
+  { line: '9', code: '934', name: '송파나루' },
+  { line: '9', code: '935', name: '한성백제' },
+  { line: '9', code: '936', name: '올림픽공원' },
+  { line: '9', code: '937', name: '둔촌오륜' },
+  { line: '9', code: '938', name: '중앙보훈병원' }
 ];
 
 module.exports = { STATIONS };

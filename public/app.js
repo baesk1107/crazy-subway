@@ -1,6 +1,6 @@
 const LINE_COLORS = {
   1: '#0052A4', 2: '#00A84D', 3: '#EF7C1C', 4: '#00A5DE',
-  5: '#996CAC', 6: '#CD7C2F', 7: '#747F00', 8: '#E6186C'
+  5: '#996CAC', 6: '#CD7C2F', 7: '#747F00', 8: '#E6186C', 9: '#BDB092'
 };
 const DOW_KO = { SUN: '일요일', MON: '월요일', TUE: '화요일', WED: '수요일', THU: '목요일', FRI: '금요일', SAT: '토요일' };
 const LEVEL_CLASS = { '여유': 'lv-여유', '보통': 'lv-보통', '혼잡': 'lv-혼잡', '매우 혼잡': 'lv-매우혼잡' };
@@ -202,10 +202,11 @@ async function loadCars(hh) {
   const { station, daily } = state;
   const dir = daily.directions[state.dirIndex];
   const updnLine = dir.updnLine ?? state.dirIndex;
+  const directAt = dir.directAt ?? 0;
 
   $('#carTitle').textContent = `칸별 혼잡도 · ${Number(hh)}시 (${dir.label})`;
 
-  const res = await fetch(`/api/congestion/car?code=${station.code}&hh=${hh}&updnLine=${updnLine}&dow=${daily.dow}`);
+  const res = await fetch(`/api/congestion/car?code=${station.code}&hh=${hh}&updnLine=${updnLine}&directAt=${directAt}&dow=${daily.dow}`);
   const data = await res.json();
   const cars = data.cars;
 
