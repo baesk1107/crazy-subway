@@ -91,7 +91,12 @@ async function selectStation(station) {
     badge.textContent = 'SK Open API 실데이터';
     badge.className = 'badge badge-live';
   } else {
-    badge.textContent = '데모 데이터 (통계 패턴) — 서버 로그를 확인하세요';
+    const reasons = {
+      quota: '데모 데이터 — SK API 일일 쿼터 소진 (자정 이후 리셋)',
+      auth: '데모 데이터 — API 키/상품 권한 오류 (포털에서 확인)',
+      error: '데모 데이터 — SK API 오류 (서버 로그 확인)'
+    };
+    badge.textContent = reasons[state.daily.reason] || '데모 데이터 (통계 패턴)';
     badge.className = 'badge badge-demo';
   }
 
@@ -239,9 +244,12 @@ async function loadCars(hh) {
   let tip =
     `여유로운 칸 추천: ${calmCars.map((x) => `${x.i}번째 칸(${x.c}%)`).join(', ')} — ` +
     `혼잡도는 열차 정원 대비 탑승 비율(%)입니다.`;
-  // 차트는 실데이터인데 칸별만 폴백된 경우(예: 칸 혼잡도 API 미신청) 명확히 알린다
+  // 차트는 실데이터인데 칸별만 폴백된 경우 명확히 알린다
   if (data.source === 'demo' && daily.source === 'sk-api') {
-    tip = `⚠️ 칸별 데이터는 데모(통계 패턴)입니다. SK Open API 포털에서 "진입 역 기준 칸 혼잡도" API 사용 신청 여부와 서버 로그를 확인하세요.\n${tip}`;
+    const why = data.reason === 'quota'
+      ? 'SK API 일일 쿼터가 소진되어'
+      : '칸 혼잡도 API 호출에 실패해';
+    tip = `⚠️ ${why} 칸별 데이터는 데모(통계 패턴)로 표시 중입니다.\n${tip}`;
   }
   $('#carTip').textContent = tip;
 }

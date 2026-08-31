@@ -80,9 +80,31 @@ function stationByCode(code) {
 // 하나의 appKey로 열차/칸 혼잡도 API를 모두 호출한다.
 // ---------------------------------------------------------------------------
 
-// 통계 데이터는 자주 바뀌지 않으므로 6시간 메모리 캐시로 호출량을 줄인다
+// 통계 데이터는 사실상 고정이므로 7일간 캐시해 무료 일일 쿼터를 아낀다.
+// 서버를 재시작해도 쿼터를 다시 쓰지 않도록 디스크(.cache/)에도 저장한다.
+const SK_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const CACHE_FILE = path.join(__dirname, '.cache', 'sk-stat.json');
 const skCache = new Map();
-const SK_CACHE_TTL = 6 * 60 * 60 * 1000;
+try {
+  for (const [k, e] of Object.entries(JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8')))) {
+    if (Date.now() - e.t < SK_CACHE_TTL) skCache.set(k, e);
+  }
+  if (skCache.size) console.log(`디스크 캐시 로드: ${skCache.size}건`);
+} catch { /* 캐시 파일 없음 — 첫 실행 */ }
+
+let cacheSaveTimer = null;
+function scheduleCacheSave() {
+  clearTimeout(cacheSaveTimer);
+  cacheSaveTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(path.dirname(CACHE_FILE), { recursive: true });
+      fs.writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(skCache)));
+    } catch (err) {
+      console.warn(`캐시 저장 실패: ${err.message}`);
+    }
+  }, 1000);
+}
+
 function cacheGet(key) {
   const e = skCache.get(key);
   if (e && Date.now() - e.t < SK_CACHE_TTL) return e.v;
@@ -91,6 +113,15 @@ function cacheGet(key) {
 }
 function cacheSet(key, v) {
   skCache.set(key, { t: Date.now(), v });
+  scheduleCacheSave();
+}
+
+// 폴백 사유를 프론트로 전달하기 위한 분류 (quota: 일일 한도 소진, auth: 키/상품 권한)
+function skErrorReason(err) {
+  const msg = String(err && err.message);
+  if (msg.includes('QUOTA_EXCEEDED')) return 'quota';
+  if (msg.includes('INVALID_API_KEY')) return 'auth';
+  return 'error';
 }
 
 async function skFetch(url) {
@@ -131,7 +162,8 @@ async function skStat(kind, station, dow, hh) {
       cacheSet(key, stat);
       return stat;
     } catch (err) {
-      lastErr = err;
+      // 쿼터 소진이 다른 스타일의 권한 오류에 가려지지 않게 우선 보존
+      if (!lastErr || skErrorReason(err) === 'quota') lastErr = err;
     }
   }
   throw lastErr || new Error(`SK API: ${kind} 조회 실패`);
@@ -151,17 +183,19 @@ function dirLabelOf(s, line) {
 // 진입 역 기준 열차 혼잡도를 시간대별로 조회해 방향별 하루 곡선으로 합친다
 async function skDaily(station, dow) {
   const byHourStat = new Map();
+  let firstErr = null;
   for (let i = 0; i < HOURS.length; i += 5) {
     // 과도한 동시 호출을 피하기 위해 5개씩 묶어 병렬 조회
     await Promise.all(HOURS.slice(i, i + 5).map(async (hh) => {
       try {
         byHourStat.set(hh, await skStat('train', station, dow, hh));
-      } catch {
+      } catch (err) {
+        if (!firstErr || skErrorReason(err) === 'quota') firstErr = err;
         byHourStat.set(hh, null);
       }
     }));
   }
-  if (![...byHourStat.values()].some(Boolean)) throw new Error('SK API: 전 시간대 조회 실패');
+  if (![...byHourStat.values()].some(Boolean)) throw firstErr || new Error('SK API: 전 시간대 조회 실패');
 
   const dirs = new Map();
   for (const hh of HOURS) {
@@ -314,6 +348,10 @@ app.get('/api/congestion/daily', async (req, res) => {
       return res.json({ station, dow, source: 'sk-api', directions });
     } catch (err) {
       console.warn(`[daily] SK API 실패, 데모 데이터로 폴백: ${err.message}`);
+      return res.json({
+        station, dow, source: 'demo', reason: skErrorReason(err),
+        directions: demoDaily(code, dow, station.line)
+      });
     }
   }
   res.json({ station, dow, source: 'demo', directions: demoDaily(code, dow, station.line) });
@@ -339,6 +377,11 @@ app.get('/api/congestion/car', async (req, res) => {
       });
     } catch (err) {
       console.warn(`[car] SK API 실패, 데모 데이터로 폴백: ${err.message}`);
+      const cars = demoCars(code, dow, hh, updnLine);
+      return res.json({
+        station, dow, hh, updnLine, directAt, source: 'demo', reason: skErrorReason(err),
+        cars: cars.map((c) => ({ congestion: c, level: level(c) }))
+      });
     }
   }
   const cars = demoCars(code, dow, hh, updnLine);
