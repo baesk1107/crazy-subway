@@ -15,6 +15,17 @@ const { STATIONS } = require('./data/stations');
 
 // appKey는 API별이 아니라 앱(프로젝트) 단위 하나로 모든 API에 공통 사용
 const SK_APP_KEY = process.env.SK_APP_KEY || '';
+
+// HTTPS_PROXY가 설정된 환경(사내망, 원격 컨테이너 등)에서는 fetch가 프록시를 타도록 설정.
+// Node 기본 fetch(undici)는 프록시 환경변수를 자동으로 읽지 않는다. 로컬 직접 연결에는 영향 없음.
+if (process.env.HTTPS_PROXY || process.env.https_proxy) {
+  try {
+    const { setGlobalDispatcher, EnvHttpProxyAgent } = require('undici');
+    setGlobalDispatcher(new EnvHttpProxyAgent());
+  } catch {
+    console.warn('HTTPS_PROXY 감지됐지만 undici 미설치 — 직접 연결로 시도합니다.');
+  }
+}
 // TMAP 대중교통 API · 진입 역 기준 혼잡도 (문서: https://transit.tmapmobility.com/docs/puzzle/car)
 // 경로가 다르면 SK_API_BASE 환경변수로 교체 가능
 const SK_BASE = process.env.SK_API_BASE || 'https://apis.openapi.sk.com/transit/puzzle/subway/congestion';
