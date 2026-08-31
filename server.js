@@ -26,9 +26,28 @@ if (process.env.HTTPS_PROXY || process.env.https_proxy) {
     console.warn('HTTPS_PROXY 감지됐지만 undici 미설치 — 직접 연결로 시도합니다.');
   }
 }
-// TMAP 대중교통 API · 진입 역 기준 혼잡도 (문서: https://transit.tmapmobility.com/docs/puzzle/car)
-// 경로가 다르면 SK_API_BASE 환경변수로 교체 가능
-const SK_BASE = process.env.SK_API_BASE || 'https://apis.openapi.sk.com/transit/puzzle/subway/congestion';
+// SK Open API의 지하철 혼잡도는 두 가지 상품/엔드포인트 체계가 있다.
+//  - puzzle : "Free(지하철 혼잡도) PUZZLE-SUBWAY" 상품. 역 코드(stationCode) 경로 방식, 1~8호선.
+//  - transit: "TMAP 대중교통" 상품. 노선명+역명(routeNm/stationNm) 쿼리 방식, 1~9호선.
+// 어떤 상품을 구매했는지에 따라 되는 쪽이 다르므로, 둘 다 시도해 성공하는 쪽을 기억한다.
+// SK_API_MODE=puzzle|transit 으로 고정할 수도 있다.
+const SK_API_STYLES = {
+  puzzle: {
+    url(kind, station, dow, hh) {
+      // 퍼즐 상품은 서울교통공사(1~8호선) 역 코드 기반 — 9호선은 지원하지 않음
+      if (station.line === '9') return null;
+      return `https://apis.openapi.sk.com/puzzle/subway/congestion/stat/${kind}/stations/${station.code}?dow=${dow}&hh=${hh}`;
+    }
+  },
+  transit: {
+    url(kind, station, dow, hh) {
+      const qs = new URLSearchParams({ routeNm: `${station.line}호선`, stationNm: station.name, dow, hh });
+      return `https://apis.openapi.sk.com/transit/puzzle/subway/congestion/stat/${kind}?${qs}`;
+    }
+  }
+};
+let skPreferredStyle = SK_API_STYLES[process.env.SK_API_MODE] ? process.env.SK_API_MODE : 'puzzle';
+const skModeLocked = Boolean(SK_API_STYLES[process.env.SK_API_MODE]);
 const PORT = process.env.PORT || 3000;
 
 const app = express();
@@ -85,23 +104,37 @@ async function skFetch(url) {
 
 // 진입 역 기준 통계 혼잡도 조회 (kind: 'train' | 'car')
 // dow/hh를 안 주면 요청 시각 기준 데이터만 오므로 시간대별로 명시 조회한다.
+// 선호 스타일(puzzle/transit)로 먼저 호출하고, 실패하면 다른 스타일을 시도해
+// 성공한 쪽을 이후 기본값으로 기억한다.
 async function skStat(kind, station, dow, hh) {
   const key = `${kind}:${station.line}:${station.name}:${dow}:${hh}`;
   const hit = cacheGet(key);
   if (hit) return hit;
 
-  const qs = new URLSearchParams({
-    routeNm: `${station.line}호선`,
-    stationNm: station.name,
-    dow,
-    hh
-  });
-  const json = await skFetch(`${SK_BASE}/stat/${kind}?${qs}`);
-  // 문서 버전에 따라 contents 또는 data 아래에 stat 배열이 온다
-  const stat = json?.contents?.stat ?? json?.data?.stat;
-  if (!Array.isArray(stat) || stat.length === 0) throw new Error(`SK API: ${kind} 응답에 stat 없음`);
-  cacheSet(key, stat);
-  return stat;
+  const styles = skModeLocked
+    ? [skPreferredStyle]
+    : [skPreferredStyle, ...Object.keys(SK_API_STYLES).filter((s) => s !== skPreferredStyle)];
+
+  let lastErr;
+  for (const styleName of styles) {
+    const url = SK_API_STYLES[styleName].url(kind, station, dow, hh);
+    if (!url) continue; // 이 스타일이 지원하지 않는 노선
+    try {
+      const json = await skFetch(url);
+      // 상품/문서 버전에 따라 contents 또는 data 아래에 stat 배열이 온다
+      const stat = json?.contents?.stat ?? json?.data?.stat;
+      if (!Array.isArray(stat) || stat.length === 0) throw new Error(`SK API: ${kind} 응답에 stat 없음`);
+      if (skPreferredStyle !== styleName) {
+        skPreferredStyle = styleName;
+        console.log(`SK API 스타일 전환: ${styleName} 방식이 동작해 기본값으로 사용합니다.`);
+      }
+      cacheSet(key, stat);
+      return stat;
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error(`SK API: ${kind} 조회 실패`);
 }
 
 // 방향 식별: 상/하행(updnLine) + 급행 여부(directAt) 조합

@@ -45,15 +45,17 @@ cp .env.example .env
 npm start
 ```
 
-키가 설정되면 서버가 다음 SK API(진입 역 기준 통계 혼잡도)를 호출합니다.
-([문서](https://transit.tmapmobility.com/docs/puzzle/car))
+SK Open API에는 지하철 혼잡도 상품이 두 가지 있고, 서버는 **둘 다 지원하며 되는 쪽을 자동 감지**합니다.
+(`SK_API_MODE=puzzle|transit`으로 고정 가능)
 
-- `GET /transit/puzzle/subway/congestion/stat/train?routeNm={노선명}&stationNm={역명}&dow={요일}&hh={시}` — 진입 역 기준 열차 혼잡도
-- `GET /transit/puzzle/subway/congestion/stat/car?routeNm={노선명}&stationNm={역명}&dow={요일}&hh={시}` — 진입 역 기준 칸 혼잡도
-  (칸별 혼잡도는 `"34|31|31|38|…"` 형태의 구분자 문자열로 반환되며 서버에서 파싱합니다)
+| 상품 | 방식 | 지원 노선 |
+|------|------|-----------|
+| Free(지하철 혼잡도) PUZZLE-SUBWAY | `GET /puzzle/subway/congestion/stat/{train\|car}/stations/{역코드}?dow=&hh=` | 1~8호선 |
+| TMAP 대중교통 | `GET /transit/puzzle/subway/congestion/stat/{train\|car}?routeNm=&stationNm=&dow=&hh=` | 1~9호선 |
 
+칸별 혼잡도는 `"34|31|31|38|…"` 형태의 구분자 문자열로 반환되며 서버에서 파싱합니다.
 시간대별 차트를 위해 시간(hh)별로 조회하고, 통계 데이터 특성상 결과를 6시간 동안 메모리에 캐시해
-API 호출량을 줄입니다. 실제 문서와 엔드포인트 경로가 다르면 `.env`의 `SK_API_BASE`로 교체할 수 있습니다.
+API 호출량을 줄입니다.
 
 ## 서버 API
 
