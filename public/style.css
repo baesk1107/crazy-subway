@@ -249,7 +249,7 @@ body {
   font-weight: 700;
   white-space: nowrap;
 }
-.car-tip { margin-top: 20px; color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+.car-tip { margin-top: 20px; color: var(--muted); font-size: 0.85rem; line-height: 1.6; white-space: pre-line; }
 
 .empty {
   text-align: center;

@@ -85,6 +85,16 @@ async function selectStation(station) {
   const res = await fetch(`/api/congestion/daily?code=${station.code}`);
   state.daily = await res.json();
 
+  // 배지를 실제 응답 출처 기준으로 갱신 (키가 있어도 API 실패 시 데모로 폴백될 수 있음)
+  const badge = $('#sourceBadge');
+  if (state.daily.source === 'sk-api') {
+    badge.textContent = 'SK Open API 실데이터';
+    badge.className = 'badge badge-live';
+  } else {
+    badge.textContent = '데모 데이터 (통계 패턴) — 서버 로그를 확인하세요';
+    badge.className = 'badge badge-demo';
+  }
+
   $('#empty').hidden = true;
   $('#result').hidden = false;
   render();
@@ -226,7 +236,12 @@ async function loadCars(hh) {
     .map((c, i) => ({ i: i + 1, c: c.congestion }))
     .sort((a, b) => a.c - b.c)
     .slice(0, 3);
-  $('#carTip').textContent =
+  let tip =
     `여유로운 칸 추천: ${calmCars.map((x) => `${x.i}번째 칸(${x.c}%)`).join(', ')} — ` +
     `혼잡도는 열차 정원 대비 탑승 비율(%)입니다.`;
+  // 차트는 실데이터인데 칸별만 폴백된 경우(예: 칸 혼잡도 API 미신청) 명확히 알린다
+  if (data.source === 'demo' && daily.source === 'sk-api') {
+    tip = `⚠️ 칸별 데이터는 데모(통계 패턴)입니다. SK Open API 포털에서 "진입 역 기준 칸 혼잡도" API 사용 신청 여부와 서버 로그를 확인하세요.\n${tip}`;
+  }
+  $('#carTip').textContent = tip;
 }
