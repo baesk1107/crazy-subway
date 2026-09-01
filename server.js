@@ -137,10 +137,15 @@ async function skFetch(url) {
 // dow/hh를 안 주면 요청 시각 기준 데이터만 오므로 시간대별로 명시 조회한다.
 // 선호 스타일(puzzle/transit)로 먼저 호출하고, 실패하면 다른 스타일을 시도해
 // 성공한 쪽을 이후 기본값으로 기억한다.
+// 일일 쿼터 소진이 감지되면 잠시 SK 호출을 중단해 헛호출(및 지연)을 막는다
+let skQuotaBlockedUntil = 0;
+const SK_QUOTA_COOLDOWN = 10 * 60 * 1000;
+
 async function skStat(kind, station, dow, hh) {
   const key = `${kind}:${station.line}:${station.name}:${dow}:${hh}`;
   const hit = cacheGet(key);
   if (hit) return hit;
+  if (Date.now() < skQuotaBlockedUntil) throw new Error('SK API QUOTA_EXCEEDED (쿨다운 중 — 호출 생략)');
 
   const styles = skModeLocked
     ? [skPreferredStyle]
@@ -162,8 +167,12 @@ async function skStat(kind, station, dow, hh) {
       cacheSet(key, stat);
       return stat;
     } catch (err) {
-      // 쿼터 소진이 다른 스타일의 권한 오류에 가려지지 않게 우선 보존
-      if (!lastErr || skErrorReason(err) === 'quota') lastErr = err;
+      // 쿼터는 앱 단위라 다른 스타일 시도가 무의미 — 쿨다운 걸고 즉시 중단
+      if (skErrorReason(err) === 'quota') {
+        skQuotaBlockedUntil = Date.now() + SK_QUOTA_COOLDOWN;
+        throw err;
+      }
+      if (!lastErr) lastErr = err;
     }
   }
   throw lastErr || new Error(`SK API: ${kind} 조회 실패`);
